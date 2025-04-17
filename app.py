@@ -348,7 +348,7 @@ else:
     if page == "Dashboard":
         display_dashboard()
     elif page == "Report Templates":
-        reports.manage_report_templates()
+        report_templates.manage_report_templates()
     elif page == "Assign Reports":
         reports.assign_reports()
     elif page == "My Reports":
@@ -362,7 +362,7 @@ else:
     elif page == "Users":
         auth.manage_users()
     elif page == "Settings":
-        st.warning("Chức năng cài đặt đang được phát triển")
+        settings.settings_page()
     else:
         st.warning("Trang không tìm thấy")
     
