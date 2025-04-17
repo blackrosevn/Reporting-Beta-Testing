@@ -1,12 +1,12 @@
-import os
 import json
+import os
 import pandas as pd
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
-import database as db
 import streamlit as st
+import database as db
 
 def create_excel_from_template(template_id, data):
     """
@@ -19,27 +19,24 @@ def create_excel_from_template(template_id, data):
     Returns:
         BytesIO object containing the Excel file
     """
-    # Get the template details
-    template = db.get_report_template(template_id)
-    if not template:
-        raise ValueError("Mẫu báo cáo không tồn tại")
-    
-    # Get sheet structure or create default
+    # Get the template sheet structure
     sheet_structure = db.get_report_template_sheet_structure(template_id)
-    if sheet_structure:
-        sheets = json.loads(sheet_structure)
-    else:
-        # Default structure with all fields in one sheet
+    if not sheet_structure:
+        # Fallback to the old single-sheet structure
+        template = db.get_report_template(template_id)
+        if not template:
+            raise ValueError("Mẫu báo cáo không tồn tại")
+        
         fields = json.loads(template['fields'])
-        sheets = {"Sheet1": fields}
-    
-    # Parse the submitted data
-    if isinstance(data, str):
-        field_values = json.loads(data)
+        sheet_structure = {
+            "Báo cáo": {
+                "fields": fields
+            }
+        }
     else:
-        field_values = data
+        sheet_structure = json.loads(sheet_structure)
     
-    # Create a new workbook
+    # Create a new Excel workbook
     wb = openpyxl.Workbook()
     
     # Remove the default sheet
@@ -47,51 +44,60 @@ def create_excel_from_template(template_id, data):
     wb.remove(default_sheet)
     
     # Define styles
-    header_font = Font(name='Arial', bold=True, size=12, color='FFFFFF')
-    header_fill = PatternFill(start_color="0066b2", end_color="0066b2", fill_type="solid")
-    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    
-    data_font = Font(name='Arial', size=11)
-    data_alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-    
+    header_font = Font(bold=True, size=12)
+    header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border = Border(
-        left=Side(style='thin', color='000000'),
-        right=Side(style='thin', color='000000'),
-        top=Side(style='thin', color='000000'),
-        bottom=Side(style='thin', color='000000')
+        left=Side(style='thin'), 
+        right=Side(style='thin'), 
+        top=Side(style='thin'), 
+        bottom=Side(style='thin')
     )
     
-    # Create each sheet according to the structure
-    for sheet_name, sheet_fields in sheets.items():
-        # Create new sheet
+    # Process each sheet in the structure
+    for sheet_name, sheet_config in sheet_structure.items():
+        # Create a new sheet
         ws = wb.create_sheet(title=sheet_name)
         
-        # Add header row with styling
-        for col_idx, field in enumerate(sheet_fields, 1):
-            cell = ws.cell(row=1, column=col_idx, value=field)
+        # Add headers
+        headers = ['STT'] + [field['label'] for field in sheet_config['fields']]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
-            cell.alignment = header_alignment
             cell.border = border
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         
-        # Add data
-        for col_idx, field in enumerate(sheet_fields, 1):
-            cell = ws.cell(row=2, column=col_idx, value=field_values.get(field, ""))
-            cell.font = data_font
-            cell.alignment = data_alignment
-            cell.border = border
+        # Auto-adjust column widths based on header length
+        for col_idx, header in enumerate(headers, 1):
+            col_letter = get_column_letter(col_idx)
+            column_width = len(header) * 1.5  # Adjust multiplier as needed
+            ws.column_dimensions[col_letter].width = max(10, min(50, column_width))
         
-        # Auto-adjust column widths
-        for col_idx, _ in enumerate(sheet_fields, 1):
-            column_letter = get_column_letter(col_idx)
-            ws.column_dimensions[column_letter].width = 20
+        # Add data rows
+        row_idx = 2
+        for idx, item in enumerate(data.get(sheet_name, []), 1):
+            ws.cell(row=row_idx, column=1, value=idx).border = border  # STT column
+            
+            for col_idx, field in enumerate(sheet_config['fields'], 2):
+                field_id = field['id']
+                value = item.get(field_id, '')
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                
+                # Apply specific formatting based on field type if needed
+                if field.get('type') == 'number':
+                    cell.number_format = '#,##0.00'
+                elif field.get('type') == 'date':
+                    cell.number_format = 'DD/MM/YYYY'
+                
+            row_idx += 1
     
-    # Create a BytesIO object to store the workbook
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
+    # Save to BytesIO
+    excel_bytes = BytesIO()
+    wb.save(excel_bytes)
+    excel_bytes.seek(0)
     
-    return excel_file
+    return excel_bytes
 
 def parse_excel_submission(uploaded_file, template_id):
     """
@@ -104,55 +110,62 @@ def parse_excel_submission(uploaded_file, template_id):
     Returns:
         Dictionary of field values
     """
-    # Get the template details
-    template = db.get_report_template(template_id)
-    if not template:
-        raise ValueError("Mẫu báo cáo không tồn tại")
-    
-    # Get sheet structure
+    # Get the template sheet structure
     sheet_structure = db.get_report_template_sheet_structure(template_id)
-    if sheet_structure:
-        expected_sheets = json.loads(sheet_structure)
-    else:
+    if not sheet_structure:
+        # Fallback to the old single-sheet structure
+        template = db.get_report_template(template_id)
+        if not template:
+            raise ValueError("Mẫu báo cáo không tồn tại")
+        
         fields = json.loads(template['fields'])
-        expected_sheets = {"Sheet1": fields}
+        sheet_structure = {
+            "Báo cáo": {
+                "fields": fields
+            }
+        }
+    else:
+        sheet_structure = json.loads(sheet_structure)
     
-    # Load the workbook
-    wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+    # Load the Excel workbook
+    wb = openpyxl.load_workbook(uploaded_file)
     
-    # Extract data from each sheet
-    field_values = {}
+    # Initialize the result dictionary
+    result = {}
     
-    for sheet_name, expected_fields in expected_sheets.items():
+    # Process each sheet in the structure
+    for sheet_name, sheet_config in sheet_structure.items():
         if sheet_name not in wb.sheetnames:
-            st.warning(f"Thiếu sheet {sheet_name} trong file Excel. Dữ liệu có thể không đầy đủ.")
+            st.warning(f"Sheet '{sheet_name}' không tồn tại trong file Excel.")
             continue
         
         ws = wb[sheet_name]
         
-        # Get header row (first row)
-        headers = []
-        for cell in ws[1]:
-            if cell.value:
-                headers.append(cell.value)
+        # Skip the header row and get data
+        data_rows = list(ws.iter_rows(min_row=2, values_only=True))
         
-        # Check if all expected fields are present
-        missing_fields = set(expected_fields) - set(headers)
-        if missing_fields:
-            st.warning(f"Thiếu các trường sau trong sheet {sheet_name}: {', '.join(missing_fields)}")
+        # Initialize sheet data
+        sheet_data = []
         
-        # Get the data from row 2
-        if len(ws.rows) < 2:
-            st.warning(f"Không có dữ liệu trong sheet {sheet_name}")
-            continue
+        # Get field IDs from the structure
+        field_ids = [field['id'] for field in sheet_config['fields']]
         
-        # Map field values
-        for col_idx, header in enumerate(headers, 1):
-            if header in expected_fields:
-                value = ws.cell(row=2, column=col_idx).value
-                field_values[header] = value if value is not None else ""
+        # Process each data row
+        for row in data_rows:
+            if all(cell is None or cell == '' for cell in row[1:]):  # Skip empty rows (excluding STT column)
+                continue
+                
+            row_data = {}
+            for idx, field_id in enumerate(field_ids):
+                # Excel data starts at column 2 (after STT column)
+                cell_value = row[idx+1] if idx+1 < len(row) else None
+                row_data[field_id] = str(cell_value) if cell_value is not None else ''
+            
+            sheet_data.append(row_data)
+        
+        result[sheet_name] = sheet_data
     
-    return field_values
+    return result
 
 def create_excel_template(template_id):
     """
@@ -164,21 +177,24 @@ def create_excel_template(template_id):
     Returns:
         BytesIO object containing the Excel template
     """
-    # Get the template details
-    template = db.get_report_template(template_id)
-    if not template:
-        raise ValueError("Mẫu báo cáo không tồn tại")
-    
-    # Get sheet structure
+    # Get the template sheet structure
     sheet_structure = db.get_report_template_sheet_structure(template_id)
-    if sheet_structure:
-        sheets = json.loads(sheet_structure)
-    else:
-        # Default structure with all fields in one sheet
+    if not sheet_structure:
+        # Fallback to the old single-sheet structure
+        template = db.get_report_template(template_id)
+        if not template:
+            raise ValueError("Mẫu báo cáo không tồn tại")
+        
         fields = json.loads(template['fields'])
-        sheets = {"Sheet1": fields}
+        sheet_structure = {
+            "Báo cáo": {
+                "fields": fields
+            }
+        }
+    else:
+        sheet_structure = json.loads(sheet_structure)
     
-    # Create a new workbook
+    # Create a new Excel workbook
     wb = openpyxl.Workbook()
     
     # Remove the default sheet
@@ -186,61 +202,49 @@ def create_excel_template(template_id):
     wb.remove(default_sheet)
     
     # Define styles
-    header_font = Font(name='Arial', bold=True, size=12, color='FFFFFF')
-    header_fill = PatternFill(start_color="0066b2", end_color="0066b2", fill_type="solid")
-    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    
-    data_font = Font(name='Arial', size=11)
-    data_alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-    
+    header_font = Font(bold=True, size=12)
+    header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border = Border(
-        left=Side(style='thin', color='000000'),
-        right=Side(style='thin', color='000000'),
-        top=Side(style='thin', color='000000'),
-        bottom=Side(style='thin', color='000000')
+        left=Side(style='thin'), 
+        right=Side(style='thin'), 
+        top=Side(style='thin'), 
+        bottom=Side(style='thin')
     )
     
-    # Create each sheet according to the structure
-    for sheet_name, sheet_fields in sheets.items():
-        # Create new sheet
+    # Process each sheet in the structure
+    for sheet_name, sheet_config in sheet_structure.items():
+        # Create a new sheet
         ws = wb.create_sheet(title=sheet_name)
         
-        # Add report name and instructions
-        ws.merge_cells('A1:D1')
-        title_cell = ws.cell(row=1, column=1, value=f"BÁO CÁO: {template['name']}")
-        title_cell.font = Font(name='Arial', bold=True, size=14)
-        title_cell.alignment = Alignment(horizontal='center', vertical='center')
-        
-        ws.merge_cells('A2:D2')
-        instructions = ws.cell(row=2, column=1, value="Hướng dẫn: Điền thông tin vào hàng dưới các tiêu đề. Không thay đổi cấu trúc file.")
-        instructions.font = Font(name='Arial', italic=True, size=11)
-        
-        # Add header row with styling (row 4)
-        for col_idx, field in enumerate(sheet_fields, 1):
-            cell = ws.cell(row=4, column=col_idx, value=field)
+        # Add headers
+        headers = ['STT'] + [field['label'] for field in sheet_config['fields']]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
-            cell.alignment = header_alignment
             cell.border = border
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         
-        # Add empty data row
-        for col_idx, _ in enumerate(sheet_fields, 1):
-            cell = ws.cell(row=5, column=col_idx, value="")
-            cell.font = data_font
-            cell.alignment = data_alignment
-            cell.border = border
+        # Auto-adjust column widths based on header length
+        for col_idx, header in enumerate(headers, 1):
+            col_letter = get_column_letter(col_idx)
+            column_width = len(header) * 1.5  # Adjust multiplier as needed
+            ws.column_dimensions[col_letter].width = max(10, min(50, column_width))
         
-        # Auto-adjust column widths
-        for col_idx, _ in enumerate(sheet_fields, 1):
-            column_letter = get_column_letter(col_idx)
-            ws.column_dimensions[column_letter].width = 20
+        # Add a few empty rows
+        for row_idx in range(2, 12):
+            ws.cell(row=row_idx, column=1, value=row_idx-1).border = border  # STT column
+            
+            for col_idx, _ in enumerate(sheet_config['fields'], 2):
+                cell = ws.cell(row=row_idx, column=col_idx, value='')
+                cell.border = border
     
-    # Create a BytesIO object to store the workbook
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
+    # Save to BytesIO
+    excel_bytes = BytesIO()
+    wb.save(excel_bytes)
+    excel_bytes.seek(0)
     
-    return excel_file
+    return excel_bytes
 
 def save_to_sharepoint(excel_file, template_name, org_name):
     """
@@ -255,37 +259,31 @@ def save_to_sharepoint(excel_file, template_name, org_name):
     Returns:
         String URL where the file would be saved
     """
-    # In a real implementation, this would use the SharePoint API
-    # For now, return a placeholder URL
+    # Load SharePoint settings
+    settings_data = db.get_settings("sharepoint")
     
-    # Get SharePoint settings
-    sharepoint_settings = db.get_settings("sharepoint")
-    
-    if sharepoint_settings:
-        settings = json.loads(sharepoint_settings)
+    if settings_data:
+        settings = json.loads(settings_data)
         base_url = settings.get("sharepoint_url", "https://vinatex.sharepoint.com/sites/reports")
         document_library = settings.get("document_library", "Documents/Reports")
         use_org_folders = settings.get("use_org_folders", True)
     else:
+        # Default settings
         base_url = "https://vinatex.sharepoint.com/sites/reports"
         document_library = "Documents/Reports"
         use_org_folders = True
     
-    # Create a sanitized filename
-    safe_template_name = template_name.replace(" ", "_")
-    safe_org_name = org_name.replace(" ", "_")
+    # Format the filename
+    filename = f"{template_name}_{org_name}.xlsx".replace(" ", "_")
     
-    # Generate timestamp
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Construct the path
+    # Generate the SharePoint URL
     if use_org_folders:
-        path = f"{document_library}/{safe_org_name}/{safe_template_name}_{timestamp}.xlsx"
+        folder_path = f"{org_name}"
+        sharepoint_url = f"{base_url}/{document_library}/{folder_path}/{filename}"
     else:
-        path = f"{document_library}/{safe_template_name}_{safe_org_name}_{timestamp}.xlsx"
+        sharepoint_url = f"{base_url}/{document_library}/{filename}"
     
-    # Construct the full URL
-    sharepoint_url = f"{base_url}/{path}"
+    # In a real implementation, we would use SharePoint API to save the file
+    # For now, we just return the URL where it would be saved
     
     return sharepoint_url

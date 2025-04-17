@@ -259,14 +259,14 @@ def update_report_status(report_id, status):
     """
     return execute_query(query, (status, report_id), fetch=False)
 
-def submit_report_data(assigned_report_id, data):
+def submit_report_data(assigned_report_id, data, sharepoint_url=None):
     """Submit data for an assigned report."""
     query = """
-    INSERT INTO report_submissions (assigned_report_id, data, submitted_at)
-    VALUES (%s, %s, NOW())
+    INSERT INTO report_submissions (assigned_report_id, data, sharepoint_url, submitted_at)
+    VALUES (%s, %s, %s, NOW())
     RETURNING id
     """
-    result = execute_query(query, (assigned_report_id, data), fetch=True)
+    result = execute_query(query, (assigned_report_id, data, sharepoint_url), fetch=True)
     
     if result is not None:
         # Update the status of the assigned report
@@ -277,7 +277,7 @@ def submit_report_data(assigned_report_id, data):
 def get_report_submission(assigned_report_id):
     """Get the submission data for an assigned report."""
     query = """
-    SELECT rs.id, rs.data, rs.submitted_at
+    SELECT rs.id, rs.data, rs.submitted_at, rs.sharepoint_url
     FROM report_submissions rs
     WHERE rs.assigned_report_id = %s
     ORDER BY rs.submitted_at DESC

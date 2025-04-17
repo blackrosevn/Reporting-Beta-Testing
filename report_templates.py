@@ -1,16 +1,14 @@
 import streamlit as st
 import pandas as pd
 import json
-import os
 import database as db
-from datetime import datetime
-import excel_handler
 
 def manage_report_templates():
-    st.title("Quản lý mẫu báo cáo")
+    """Manage report templates."""
+    st.title("📋 Quản lý mẫu báo cáo")
     
-    # Create tabs for template management
-    tab1, tab2 = st.tabs(["Danh sách mẫu báo cáo", "Tạo mẫu báo cáo mới"])
+    # Create tabs for managing templates and configuring sheets
+    tab1, tab2 = st.tabs(["Danh sách mẫu báo cáo", "Tạo mẫu báo cáo"])
     
     with tab1:
         list_report_templates()
@@ -20,276 +18,488 @@ def manage_report_templates():
 
 def list_report_templates():
     """Display a list of all report templates with edit and delete options."""
-    st.subheader("Danh sách mẫu báo cáo hiện có")
+    st.subheader("Danh sách mẫu báo cáo")
     
-    # Get all report templates from database
+    # Get all report templates
     templates = db.get_report_templates()
     
     if templates is None or templates.empty:
-        st.info("Chưa có mẫu báo cáo nào. Hãy tạo mẫu báo cáo mới.")
+        st.info("Chưa có mẫu báo cáo nào.")
         return
     
-    # Display each template as an expandable card
+    # Display templates in a table
     for _, template in templates.iterrows():
-        with st.expander(f"{template['name']} - {template['department']}"):
-            col1, col2 = st.columns([3, 1])
+        with st.container():
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
             
             with col1:
-                st.write(f"**Mô tả:** {template['description']}")
-                st.write("**Các trường dữ liệu:**")
+                st.write(f"**{template['name']}**")
+                st.write(f"Phòng ban: {template['department']}")
                 
-                # Display fields with bullet points
-                fields = json.loads(template['fields'])
-                for field in fields:
-                    st.write(f"• {field}")
-                
-                # Display sheet structure if available
-                sheet_structure = db.get_report_template_sheet_structure(template['id'])
-                if sheet_structure:
-                    st.write("**Cấu trúc sheet Excel:**")
-                    sheets = json.loads(sheet_structure)
-                    for sheet_name, sheet_fields in sheets.items():
-                        st.write(f"• Sheet '{sheet_name}': {', '.join(sheet_fields)}")
-                else:
-                    st.write("**Cấu trúc sheet Excel:** Chưa được cấu hình")
-            
             with col2:
-                # Edit button
-                if st.button("Chỉnh sửa", key=f"edit_{template['id']}"):
-                    st.session_state.editing_template = template
-                    st.rerun()
-                
-                # Configure Excel sheets button
-                if st.button("Cấu hình Excel", key=f"excel_{template['id']}"):
-                    st.session_state.configuring_excel = template
-                    st.rerun()
-                
-                # Delete button
+                if st.button("Xem", key=f"view_{template['id']}"):
+                    # Store template ID in session state and show view dialog
+                    st.session_state.viewing_template = template.to_dict()
+                    st.session_state.show_view_dialog = True
+            
+            with col3:
+                if st.button("Sửa", key=f"edit_{template['id']}"):
+                    # Store template ID in session state and show edit dialog
+                    st.session_state.editing_template = template.to_dict()
+                    st.session_state.show_edit_dialog = True
+            
+            with col4:
                 if st.button("Xóa", key=f"delete_{template['id']}"):
-                    if db.delete_report_template(template['id']):
-                        st.success("Xóa mẫu báo cáo thành công!")
+                    # Store template ID in session state and show delete dialog
+                    st.session_state.deleting_template_id = template['id']
+                    st.session_state.deleting_template_name = template['name']
+                    st.session_state.show_delete_dialog = True
+            
+            st.divider()
+    
+    # Handle view dialog
+    if st.session_state.get('show_view_dialog', False) and st.session_state.get('viewing_template'):
+        template = st.session_state.viewing_template
+        
+        with st.expander("Chi tiết mẫu báo cáo", expanded=True):
+            st.write(f"**Tên mẫu báo cáo:** {template['name']}")
+            st.write(f"**Mô tả:** {template['description']}")
+            st.write(f"**Phòng ban:** {template['department']}")
+            
+            # Parse and display fields
+            fields = json.loads(template['fields'])
+            st.write("**Các trường dữ liệu:**")
+            
+            for field in fields:
+                st.write(f"- {field['label']} ({field['id']})")
+            
+            # Get sheet structure if available
+            sheet_structure = db.get_report_template_sheet_structure(template['id'])
+            if sheet_structure:
+                sheet_data = json.loads(sheet_structure)
+                st.write("**Cấu trúc Excel:**")
+                
+                for sheet_name, sheet_config in sheet_data.items():
+                    st.write(f"- Sheet: {sheet_name}")
+                    st.write(f"  - Các trường: {', '.join([field['label'] for field in sheet_config['fields']])}")
+            
+            if st.button("Đóng", key="close_view"):
+                st.session_state.show_view_dialog = False
+                st.session_state.viewing_template = None
+                st.rerun()
+    
+    # Handle edit dialog
+    if st.session_state.get('show_edit_dialog', False) and st.session_state.get('editing_template'):
+        edit_report_template(st.session_state.editing_template)
+    
+    # Handle delete dialog
+    if st.session_state.get('show_delete_dialog', False):
+        with st.expander("Xác nhận xóa", expanded=True):
+            st.warning(f"Bạn có chắc chắn muốn xóa mẫu báo cáo '{st.session_state.deleting_template_name}'?")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Xác nhận", key="confirm_delete"):
+                    # Delete the template
+                    success = db.delete_report_template(st.session_state.deleting_template_id)
+                    if success:
+                        st.success("Đã xóa mẫu báo cáo.")
+                        st.session_state.show_delete_dialog = False
+                        st.session_state.deleting_template_id = None
+                        st.session_state.deleting_template_name = None
                         st.rerun()
                     else:
                         st.error("Không thể xóa mẫu báo cáo.")
-    
-    # If a template is selected for editing, show the edit form
-    if 'editing_template' in st.session_state:
-        edit_report_template(st.session_state.editing_template)
-    
-    # If a template is selected for Excel configuration, show the config form
-    if 'configuring_excel' in st.session_state:
-        configure_excel_sheets(st.session_state.configuring_excel)
+            
+            with col2:
+                if st.button("Hủy", key="cancel_delete"):
+                    st.session_state.show_delete_dialog = False
+                    st.session_state.deleting_template_id = None
+                    st.session_state.deleting_template_name = None
+                    st.rerun()
 
 def create_report_template():
     """Form to create a new report template."""
     st.subheader("Tạo mẫu báo cáo mới")
     
-    # Get list of departments for dropdown
-    departments = db.get_organization_departments()
-    if departments is None or departments.empty:
-        st.error("Không thể tải danh sách phòng ban. Vui lòng thử lại sau.")
-        return
-    
-    department_options = {row['name']: row['id'] for _, row in departments.iterrows()}
-    
-    # Create the form
-    with st.form("new_template_form"):
-        template_name = st.text_input("Tên mẫu báo cáo", placeholder="Nhập tên mẫu báo cáo")
-        description = st.text_area("Mô tả", placeholder="Mô tả chi tiết về mẫu báo cáo")
+    with st.form("create_template_form"):
+        # Get departments for dropdown
+        departments = db.get_organization_departments()
         
-        # Department selection
-        department = st.selectbox("Phòng ban quản lý", options=list(department_options.keys()))
+        if departments is None or departments.empty:
+            st.error("Không thể tải danh sách phòng ban.")
+            return
         
-        # Fields section
-        st.subheader("Các trường dữ liệu trong báo cáo")
-        st.write("Nhập mỗi trường dữ liệu trên một dòng")
+        department_options = departments['name'].tolist()
+        department_ids = departments['id'].tolist()
         
-        fields_text = st.text_area("Trường dữ liệu", height=200, placeholder="Ví dụ:\nDoanh thu (VND)\nChi phí (VND)\nLợi nhuận (VND)")
+        # Form fields
+        name = st.text_input("Tên mẫu báo cáo", key="create_name")
+        description = st.text_area("Mô tả", key="create_description")
+        department = st.selectbox("Phòng ban quản lý", department_options, key="create_department")
         
-        # Submit button
+        # Dynamic fields management
+        st.subheader("Các trường dữ liệu")
+        
+        if 'fields' not in st.session_state:
+            st.session_state.fields = []
+        
+        for i, field in enumerate(st.session_state.fields):
+            col1, col2, col3 = st.columns([3, 2, 1])
+            
+            with col1:
+                field['label'] = st.text_input(f"Tên trường {i+1}", value=field['label'], key=f"field_label_{i}")
+            
+            with col2:
+                field['type'] = st.selectbox(
+                    f"Loại dữ liệu {i+1}", 
+                    ["text", "number", "date"], 
+                    index=["text", "number", "date"].index(field['type']),
+                    key=f"field_type_{i}"
+                )
+            
+            with col3:
+                if st.button("Xóa", key=f"remove_field_{i}"):
+                    st.session_state.fields.pop(i)
+                    st.rerun()
+        
+        if st.button("Thêm trường", key="add_field"):
+            # Generate a unique ID for the field
+            field_id = f"field_{len(st.session_state.fields) + 1}"
+            st.session_state.fields.append({
+                'id': field_id,
+                'label': f"Trường {len(st.session_state.fields) + 1}",
+                'type': "text"
+            })
+            st.rerun()
+        
         submitted = st.form_submit_button("Tạo mẫu báo cáo")
         
         if submitted:
-            if not template_name or not description or not fields_text:
-                st.error("Vui lòng điền đầy đủ thông tin cho mẫu báo cáo.")
-                return
-            
-            # Process fields
-            fields = [field.strip() for field in fields_text.strip().split('\n') if field.strip()]
-            
-            if len(fields) == 0:
-                st.error("Vui lòng nhập ít nhất một trường dữ liệu.")
-                return
-            
-            # Save to database
-            department_id = department_options[department]
-            if db.add_report_template(template_name, description, json.dumps(fields), department_id):
-                st.success("Đã tạo mẫu báo cáo thành công!")
-                # Create a default Excel sheet structure
-                template_id = db.execute_query(
-                    "SELECT id FROM report_templates WHERE name = %s ORDER BY created_at DESC LIMIT 1",
-                    (template_name,)
-                )
-                if template_id is not None and not template_id.empty:
-                    template_id = template_id.iloc[0]['id']
-                    # Create a default sheet structure with all fields in one sheet
-                    sheet_structure = {"Sheet1": fields}
-                    db.update_report_template_sheet_structure(template_id, json.dumps(sheet_structure))
+            if not name:
+                st.error("Vui lòng nhập tên mẫu báo cáo.")
+            elif not st.session_state.fields:
+                st.error("Vui lòng thêm ít nhất một trường dữ liệu.")
             else:
-                st.error("Không thể tạo mẫu báo cáo. Vui lòng thử lại.")
+                # Get department ID from selection
+                department_idx = department_options.index(department)
+                department_id = department_ids[department_idx]
+                
+                # Convert fields to JSON
+                fields_json = json.dumps(st.session_state.fields)
+                
+                # Save template to database
+                success = db.add_report_template(name, description, fields_json, department_id)
+                
+                if success:
+                    # Get the template ID of the newly created template
+                    templates = db.get_report_templates()
+                    new_template = templates[templates['name'] == name].iloc[0]
+                    template_id = new_template['id']
+                    
+                    # Create an empty sheet structure and save it
+                    sheet_structure = {
+                        "Báo cáo": {
+                            "fields": st.session_state.fields
+                        }
+                    }
+                    db.update_report_template_sheet_structure(template_id, json.dumps(sheet_structure))
+                    
+                    st.success("Đã tạo mẫu báo cáo thành công.")
+                    st.session_state.fields = []
+                    
+                    # Offer to configure Excel structure
+                    st.info("Bạn có thể thiết lập cấu trúc Excel cho mẫu báo cáo này.")
+                    if st.button("Thiết lập cấu trúc Excel"):
+                        st.session_state.configuring_template_id = template_id
+                        st.session_state.configuring_template = new_template.to_dict()
+                        st.session_state.show_excel_config = True
+                        st.rerun()
+                else:
+                    st.error("Không thể tạo mẫu báo cáo. Vui lòng thử lại sau.")
 
 def edit_report_template(template):
     """Form to edit an existing report template."""
     st.subheader(f"Chỉnh sửa mẫu báo cáo: {template['name']}")
     
-    # Get list of departments for dropdown
+    # Get departments for dropdown
     departments = db.get_organization_departments()
+    
     if departments is None or departments.empty:
-        st.error("Không thể tải danh sách phòng ban. Vui lòng thử lại sau.")
+        st.error("Không thể tải danh sách phòng ban.")
         return
     
-    department_options = {row['name']: row['id'] for _, row in departments.iterrows()}
+    department_options = departments['name'].tolist()
+    department_ids = departments['id'].tolist()
     
-    # Find current department name
+    # Get current department
     current_dept_id = template['department_id']
-    current_dept_name = next((name for name, id in department_options.items() if id == current_dept_id), list(department_options.keys())[0])
+    current_dept_idx = 0
     
-    # Parse existing fields
-    current_fields = json.loads(template['fields'])
-    fields_text = '\n'.join(current_fields)
+    for i, dept_id in enumerate(department_ids):
+        if dept_id == current_dept_id:
+            current_dept_idx = i
+            break
     
-    # Create the form
+    # Parse fields from JSON
+    fields = json.loads(template['fields'])
+    
+    # Initialize session state for editing fields if not exists
+    if 'editing_fields' not in st.session_state:
+        st.session_state.editing_fields = fields
+    
     with st.form("edit_template_form"):
-        template_name = st.text_input("Tên mẫu báo cáo", value=template['name'])
-        description = st.text_area("Mô tả", value=template['description'])
+        name = st.text_input("Tên mẫu báo cáo", value=template['name'], key="edit_name")
+        description = st.text_area("Mô tả", value=template['description'], key="edit_description")
+        department = st.selectbox(
+            "Phòng ban quản lý", 
+            department_options, 
+            index=current_dept_idx,
+            key="edit_department"
+        )
         
-        # Department selection
-        department = st.selectbox("Phòng ban quản lý", options=list(department_options.keys()), index=list(department_options.keys()).index(current_dept_name))
+        # Dynamic fields management
+        st.subheader("Các trường dữ liệu")
         
-        # Fields section
-        st.subheader("Các trường dữ liệu trong báo cáo")
-        st.write("Nhập mỗi trường dữ liệu trên một dòng")
+        for i, field in enumerate(st.session_state.editing_fields):
+            col1, col2, col3 = st.columns([3, 2, 1])
+            
+            with col1:
+                field['label'] = st.text_input(f"Tên trường {i+1}", value=field['label'], key=f"edit_field_label_{i}")
+            
+            with col2:
+                field_type = field.get('type', 'text')
+                field['type'] = st.selectbox(
+                    f"Loại dữ liệu {i+1}", 
+                    ["text", "number", "date"], 
+                    index=["text", "number", "date"].index(field_type) if field_type in ["text", "number", "date"] else 0,
+                    key=f"edit_field_type_{i}"
+                )
+            
+            with col3:
+                if st.button("Xóa", key=f"edit_remove_field_{i}"):
+                    st.session_state.editing_fields.pop(i)
+                    st.rerun()
         
-        new_fields_text = st.text_area("Trường dữ liệu", height=200, value=fields_text)
+        if st.button("Thêm trường", key="edit_add_field"):
+            # Generate a unique ID for the field
+            field_id = f"field_{len(st.session_state.editing_fields) + 1}"
+            st.session_state.editing_fields.append({
+                'id': field_id,
+                'label': f"Trường {len(st.session_state.editing_fields) + 1}",
+                'type': "text"
+            })
+            st.rerun()
         
-        # Cancel button and submit button in columns
         col1, col2 = st.columns(2)
+        
         with col1:
-            if st.form_submit_button("Hủy"):
-                del st.session_state.editing_template
-                st.rerun()
+            submitted = st.form_submit_button("Cập nhật mẫu báo cáo")
         
         with col2:
-            submitted = st.form_submit_button("Cập nhật")
+            configure_excel = st.form_submit_button("Thiết lập cấu trúc Excel")
         
         if submitted:
-            if not template_name or not description or not new_fields_text:
-                st.error("Vui lòng điền đầy đủ thông tin cho mẫu báo cáo.")
-                return
-            
-            # Process fields
-            new_fields = [field.strip() for field in new_fields_text.strip().split('\n') if field.strip()]
-            
-            if len(new_fields) == 0:
-                st.error("Vui lòng nhập ít nhất một trường dữ liệu.")
-                return
-            
-            # Save to database
-            department_id = department_options[department]
-            if db.update_report_template(template['id'], template_name, description, json.dumps(new_fields), department_id):
-                st.success("Đã cập nhật mẫu báo cáo thành công!")
-                del st.session_state.editing_template
-                st.rerun()
+            if not name:
+                st.error("Vui lòng nhập tên mẫu báo cáo.")
+            elif not st.session_state.editing_fields:
+                st.error("Vui lòng thêm ít nhất một trường dữ liệu.")
             else:
-                st.error("Không thể cập nhật mẫu báo cáo. Vui lòng thử lại.")
+                # Get department ID from selection
+                department_idx = department_options.index(department)
+                department_id = department_ids[department_idx]
+                
+                # Convert fields to JSON
+                fields_json = json.dumps(st.session_state.editing_fields)
+                
+                # Update template in database
+                success = db.update_report_template(template['id'], name, description, fields_json, department_id)
+                
+                if success:
+                    st.success("Đã cập nhật mẫu báo cáo thành công.")
+                    
+                    # Update sheet structure if it exists
+                    sheet_structure = db.get_report_template_sheet_structure(template['id'])
+                    if sheet_structure:
+                        sheet_data = json.loads(sheet_structure)
+                        
+                        # Update fields in all sheets
+                        for sheet_name in sheet_data:
+                            sheet_data[sheet_name]['fields'] = st.session_state.editing_fields
+                        
+                        db.update_report_template_sheet_structure(template['id'], json.dumps(sheet_data))
+                    else:
+                        # Create default sheet structure
+                        sheet_structure = {
+                            "Báo cáo": {
+                                "fields": st.session_state.editing_fields
+                            }
+                        }
+                        db.update_report_template_sheet_structure(template['id'], json.dumps(sheet_structure))
+                    
+                    # Close the edit dialog
+                    st.session_state.show_edit_dialog = False
+                    st.session_state.editing_template = None
+                    st.session_state.editing_fields = None
+                    st.rerun()
+                else:
+                    st.error("Không thể cập nhật mẫu báo cáo. Vui lòng thử lại sau.")
+        
+        elif configure_excel:
+            # Save current changes first
+            if name and st.session_state.editing_fields:
+                # Get department ID from selection
+                department_idx = department_options.index(department)
+                department_id = department_ids[department_idx]
+                
+                # Convert fields to JSON
+                fields_json = json.dumps(st.session_state.editing_fields)
+                
+                # Update template in database
+                success = db.update_report_template(template['id'], name, description, fields_json, department_id)
+                
+                if success:
+                    st.success("Đã cập nhật mẫu báo cáo thành công.")
+                    
+                    # Go to Excel configuration
+                    st.session_state.configuring_template_id = template['id']
+                    st.session_state.configuring_template = template
+                    st.session_state.configuring_fields = st.session_state.editing_fields
+                    st.session_state.show_excel_config = True
+                    st.rerun()
+                else:
+                    st.error("Không thể cập nhật mẫu báo cáo. Vui lòng thử lại sau.")
+            else:
+                st.error("Vui lòng điền đầy đủ thông tin trước khi thiết lập cấu trúc Excel.")
+    
+    # Close button outside the form
+    if st.button("Đóng", key="edit_close"):
+        st.session_state.show_edit_dialog = False
+        st.session_state.editing_template = None
+        st.session_state.editing_fields = None
+        st.rerun()
 
 def configure_excel_sheets(template):
     """Configure Excel sheet structure for a report template."""
-    st.subheader(f"Cấu hình cấu trúc Excel cho: {template['name']}")
+    st.subheader(f"Thiết lập cấu trúc Excel: {template['name']}")
     
-    # Parse fields from template
-    fields = json.loads(template['fields'])
-    
-    # Get current sheet structure or create a default one
-    current_structure = db.get_report_template_sheet_structure(template['id'])
-    if current_structure:
-        sheets = json.loads(current_structure)
+    # Get fields from session state or from template
+    if 'configuring_fields' in st.session_state:
+        fields = st.session_state.configuring_fields
     else:
-        # Default structure with all fields in Sheet1
-        sheets = {"Sheet1": fields}
+        fields = json.loads(template['fields'])
     
-    # Display the current structure
-    st.write("**Cấu trúc hiện tại:**")
-    for sheet_name, sheet_fields in sheets.items():
-        st.write(f"• Sheet '{sheet_name}': {', '.join(sheet_fields)}")
+    # Get current sheet structure if it exists
+    current_structure = db.get_report_template_sheet_structure(template['id'])
     
-    st.markdown("---")
-    st.write("**Cấu hình lại cấu trúc Excel:**")
-    st.write("Mỗi báo cáo có thể được chia thành nhiều sheet, mỗi sheet chứa các trường dữ liệu khác nhau.")
+    if current_structure:
+        sheet_structure = json.loads(current_structure)
+    else:
+        # Create default structure with a single sheet
+        sheet_structure = {
+            "Báo cáo": {
+                "fields": fields
+            }
+        }
     
-    # Count the number of sheets in the current structure
-    num_sheets = len(sheets)
+    # Initialize session state for sheet management
+    if 'sheet_structure' not in st.session_state:
+        st.session_state.sheet_structure = sheet_structure
     
-    # Let user add or remove sheets
-    new_num_sheets = st.number_input("Số lượng sheet", min_value=1, value=num_sheets, step=1)
+    # Sheet management
+    st.write("**Quản lý các sheet trong Excel:**")
     
-    # If number of sheets has changed, adjust the structure
-    if new_num_sheets != num_sheets:
-        if new_num_sheets > num_sheets:
-            # Add new sheets
-            for i in range(num_sheets + 1, new_num_sheets + 1):
-                sheets[f"Sheet{i}"] = []
-        else:
-            # Remove excess sheets (starting from the highest number)
-            sheet_names = sorted(list(sheets.keys()))
-            for i in range(num_sheets - new_num_sheets):
-                if sheet_names:
-                    del sheets[sheet_names.pop()]
-    
-    # Create form for configuring each sheet
-    with st.form("sheet_config_form"):
-        new_structure = {}
-        
-        for i, (sheet_name, sheet_fields) in enumerate(sheets.items()):
-            st.subheader(f"Sheet {i+1}")
+    for sheet_name in list(st.session_state.sheet_structure.keys()):
+        with st.expander(f"Sheet: {sheet_name}", expanded=True):
+            # Allow changing sheet name
+            new_name = st.text_input(f"Tên sheet", value=sheet_name, key=f"sheet_name_{sheet_name}")
             
-            new_sheet_name = st.text_input(f"Tên sheet {i+1}", value=sheet_name, key=f"sheet_name_{i}")
+            if new_name != sheet_name and new_name and new_name not in st.session_state.sheet_structure:
+                # Rename the sheet
+                st.session_state.sheet_structure[new_name] = st.session_state.sheet_structure[sheet_name]
+                del st.session_state.sheet_structure[sheet_name]
+                st.rerun()
             
-            # Multiselect for fields
+            # Field management for this sheet
+            st.write("**Các trường dữ liệu trong sheet:**")
+            
+            # Get field IDs already in this sheet
+            sheet_field_ids = [field['id'] for field in st.session_state.sheet_structure[sheet_name]['fields']]
+            
+            # Create a list of all available fields for multiselect
+            field_options = {field['id']: field['label'] for field in fields}
+            
+            # Show selected fields and allow reordering
             selected_fields = st.multiselect(
-                f"Các trường dữ liệu cho sheet {i+1}",
-                options=fields,
-                default=sheet_fields,
-                key=f"sheet_fields_{i}"
+                "Chọn các trường dữ liệu",
+                options=list(field_options.keys()),
+                default=sheet_field_ids,
+                format_func=lambda x: field_options[x],
+                key=f"fields_{sheet_name}"
             )
             
-            new_structure[new_sheet_name] = selected_fields
-        
-        # Cancel and submit buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.form_submit_button("Hủy"):
-                del st.session_state.configuring_excel
-                st.rerun()
-        
-        with col2:
-            submitted = st.form_submit_button("Lưu cấu hình")
-        
-        if submitted:
-            # Validate that each field is included in at least one sheet
-            all_assigned_fields = []
-            for sheet_fields in new_structure.values():
-                all_assigned_fields.extend(sheet_fields)
+            # Update the sheet's fields based on selection and ordering
+            if selected_fields:
+                # Create new field list preserving field details
+                new_field_list = []
+                for field_id in selected_fields:
+                    for field in fields:
+                        if field['id'] == field_id:
+                            new_field_list.append(field)
+                            break
+                
+                st.session_state.sheet_structure[sheet_name]['fields'] = new_field_list
             
-            missing_fields = set(fields) - set(all_assigned_fields)
-            if missing_fields:
-                st.error(f"Các trường sau chưa được đưa vào bất kỳ sheet nào: {', '.join(missing_fields)}")
-                return
-            
-            # Save the new structure
-            if db.update_report_template_sheet_structure(template['id'], json.dumps(new_structure)):
-                st.success("Đã cập nhật cấu trúc Excel thành công!")
-                del st.session_state.configuring_excel
-                st.rerun()
-            else:
-                st.error("Không thể cập nhật cấu trúc Excel. Vui lòng thử lại.")
+            # Delete sheet button
+            if len(st.session_state.sheet_structure) > 1:  # Don't allow deleting if it's the only sheet
+                if st.button("Xóa sheet này", key=f"delete_sheet_{sheet_name}"):
+                    del st.session_state.sheet_structure[sheet_name]
+                    st.rerun()
+    
+    # Add new sheet button
+    if st.button("Thêm sheet mới"):
+        # Generate a unique sheet name
+        base_name = "Sheet mới"
+        sheet_name = base_name
+        counter = 1
+        
+        while sheet_name in st.session_state.sheet_structure:
+            sheet_name = f"{base_name} {counter}"
+            counter += 1
+        
+        # Add new sheet with all fields
+        st.session_state.sheet_structure[sheet_name] = {
+            "fields": fields
+        }
+        
+        st.rerun()
+    
+    # Save changes button
+    if st.button("Lưu cấu trúc Excel"):
+        # Save sheet structure to database
+        success = db.update_report_template_sheet_structure(
+            template['id'], 
+            json.dumps(st.session_state.sheet_structure)
+        )
+        
+        if success:
+            st.success("Đã lưu cấu trúc Excel thành công.")
+            # Clear session state
+            st.session_state.show_excel_config = False
+            st.session_state.configuring_template_id = None
+            st.session_state.configuring_template = None
+            st.session_state.configuring_fields = None
+            st.session_state.sheet_structure = None
+            st.rerun()
+        else:
+            st.error("Không thể lưu cấu trúc Excel. Vui lòng thử lại sau.")
+    
+    # Cancel button
+    if st.button("Hủy"):
+        # Clear session state without saving
+        st.session_state.show_excel_config = False
+        st.session_state.configuring_template_id = None
+        st.session_state.configuring_template = None
+        st.session_state.configuring_fields = None
+        st.session_state.sheet_structure = None
+        st.rerun()
