@@ -439,3 +439,59 @@ def get_unit_action_needed_reports(unit_id):
         ar.due_date ASC
     """
     return execute_query(query, (unit_id,))
+
+# System settings functions
+def get_settings(setting_type):
+    """Get settings by type."""
+    query = """
+    SELECT value
+    FROM system_settings
+    WHERE type = %s
+    """
+    result = execute_query(query, (setting_type,))
+    if result is not None and not result.empty:
+        return result.iloc[0]['value']
+    return None
+
+def save_settings(setting_type, value):
+    """Save settings by type. Updates if exists, otherwise inserts."""
+    # Check if setting exists
+    check_query = "SELECT id FROM system_settings WHERE type = %s"
+    result = execute_query(check_query, (setting_type,))
+    
+    if result is not None and not result.empty:
+        # Update existing setting
+        update_query = """
+        UPDATE system_settings
+        SET value = %s, updated_at = NOW()
+        WHERE type = %s
+        """
+        return execute_query(update_query, (value, setting_type), fetch=False)
+    else:
+        # Insert new setting
+        insert_query = """
+        INSERT INTO system_settings (type, value, created_at, updated_at)
+        VALUES (%s, %s, NOW(), NOW())
+        """
+        return execute_query(insert_query, (setting_type, value), fetch=False)
+
+def update_report_template_sheet_structure(template_id, sheet_structure):
+    """Update the sheet structure for a report template."""
+    query = """
+    UPDATE report_templates
+    SET sheet_structure = %s, updated_at = NOW()
+    WHERE id = %s
+    """
+    return execute_query(query, (sheet_structure, template_id), fetch=False)
+
+def get_report_template_sheet_structure(template_id):
+    """Get the sheet structure for a report template."""
+    query = """
+    SELECT sheet_structure
+    FROM report_templates
+    WHERE id = %s
+    """
+    result = execute_query(query, (template_id,))
+    if result is not None and not result.empty and result.iloc[0]['sheet_structure']:
+        return result.iloc[0]['sheet_structure']
+    return None

@@ -52,6 +52,7 @@ def create_tables():
         name VARCHAR(255) NOT NULL,
         description TEXT,
         fields TEXT NOT NULL,  -- JSON string of field names
+        sheet_structure TEXT,  -- JSON string defining Excel sheet structure
         department_id INT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -76,8 +77,18 @@ def create_tables():
         id SERIAL PRIMARY KEY,
         assigned_report_id INT NOT NULL,
         data TEXT NOT NULL,  -- JSON string of field values
+        sharepoint_url TEXT,  -- URL to the saved file in SharePoint
         submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (assigned_report_id) REFERENCES assigned_reports(id) ON DELETE CASCADE
+    );
+    
+    -- System Settings table
+    CREATE TABLE IF NOT EXISTS system_settings (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(50) NOT NULL,  -- 'email', 'sharepoint', 'notification', etc.
+        value TEXT NOT NULL,  -- JSON string of settings
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     """
     

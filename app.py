@@ -11,6 +11,8 @@ import reports
 import organizations
 import excel_handler
 import utils
+import settings
+import report_templates
 
 # Initialize session state variables if they don't exist
 if 'authenticated' not in st.session_state:
