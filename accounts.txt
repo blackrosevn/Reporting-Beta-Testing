@@ -1,0 +1,47 @@
+Vinatex Report Portal - Account Information
+=========================================
+
+Admin Access:
+Username: admin
+Password: admin123
+
+Department Access:
+1. Finance Department
+   Username: finance
+   Password: finance123
+
+2. HR Department
+   Username: hr
+   Password: hr123
+
+3. Yarn Department
+   Username: yarn
+   Password: yarn123
+
+4. Garment Department
+   Username: garment
+   Password: garment123
+
+Member Units Access:
+1. Tổng Công ty CP May Hưng Yên
+   Username: hungyen
+   Password: hungyen123
+
+2. Tổng Công ty CP Dệt May Hòa Thọ
+   Username: hoatho
+   Password: hoatho123
+
+3. Tổng Công ty May 10 - CTCP
+   Username: may10
+   Password: may10123
+
+4. Tổng Công ty CP May Đáp Cầu
+   Username: dapcau
+   Password: dapcau123
+
+5. Tổng Công ty CP Dệt May Nam Định
+   Username: namdinh
+   Password: namdinh123
+
+Database Credentials:
+Database URL: postgresql://neondb_owner:npg_XmU3dFBcwS8V@ep-purple-frog-a6qqyfb8.us-west-2.aws.neon.tech/neondb?sslmode=require

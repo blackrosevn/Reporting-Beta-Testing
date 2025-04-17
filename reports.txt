@@ -1,0 +1,57 @@
+Vinatex Report Portal - Report Templates
+=====================================
+
+1. Báo cáo tài chính
+   Department: Ban Tài chính - Kế toán
+   Description: Báo cáo tài chính hàng quý của đơn vị
+   Fields:
+     - Revenue (VND)
+     - Expenses (VND)
+     - Profit (VND)
+     - Accounts Receivable (VND)
+     - Accounts Payable (VND)
+     - Cash Flow (VND)
+
+2. Báo cáo Nhân sự
+   Department: Ban Nhân sự
+   Description: Báo cáo tình hình nhân sự định kỳ
+   Fields:
+     - Total Employees
+     - New Hires
+     - Terminations
+     - Turnover Rate (%)
+     - Training Hours
+     - Labor Cost (VND)
+
+3. Báo cáo tình hình SXKD Ban Sợi
+   Department: Ban Sợi
+   Description: Báo cáo sản xuất kinh doanh ngành sợi
+   Fields:
+     - Production Volume (kg)
+     - Production Capacity (%)
+     - Raw Material Cost (VND/kg)
+     - Energy Consumption (kWh)
+     - Quality Metrics (%)
+     - Inventory Level (kg)
+
+4. Báo cáo tình hình SXKD Ban May
+   Department: Ban May
+   Description: Báo cáo sản xuất kinh doanh ngành may
+   Fields:
+     - Production Volume (pieces)
+     - Production Capacity (%)
+     - Material Cost (VND/piece)
+     - Labor Productivity (pieces/person)
+     - Quality Metrics (%)
+     - Inventory Level (pieces)
+
+5. Báo cáo sản xuất
+   Department: Ban Đầu tư
+   Description: Báo cáo tình hình sản xuất chung
+   Fields:
+     - Production Plan Completion (%)
+     - Production Volume
+     - Production Value (VND)
+     - Defect Rate (%)
+     - Operating Hours
+     - Downtime Hours

@@ -237,3 +237,7 @@ def unit_dashboard():
 if __name__ == "__main__":
     # Ensure database connection is established
     db.initialize_connection()
+    
+    # Initialize database if needed
+    import setup_database
+    setup_database.initialize_database()

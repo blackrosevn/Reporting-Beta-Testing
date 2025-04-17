@@ -1,0 +1,19 @@
+Vinatex Report Portal - Organizations Information
+=============================================
+
+Holding Company:
+- Vinatex (Tập đoàn Dệt May Việt Nam)
+
+Functional Departments:
+1. Ban Tài chính - Kế toán
+2. Ban Nhân sự
+3. Ban Sợi
+4. Ban May
+5. Ban Đầu tư
+
+Member Units:
+1. Tổng Công ty CP May Hưng Yên
+2. Tổng Công ty CP Dệt May Hòa Thọ
+3. Tổng Công ty May 10 - CTCP
+4. Tổng Công ty CP May Đáp Cầu
+5. Tổng Công ty CP Dệt May Nam Định
