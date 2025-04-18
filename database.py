@@ -6,14 +6,20 @@ from datetime import datetime, timedelta
 import streamlit as st
 import urllib.parse
 
-# Get database URL from environment
-database_url = os.getenv('DATABASE_URL')
+# Database connection parameters
+db_params = {
+    'dbname': 'vinatex_reports',
+    'user': 'root',
+    'password': 'root123',
+    'host': 'localhost',
+    'port': '5432'
+}
 
 @st.cache_resource
 def initialize_connection():
     """Establish a connection to the PostgreSQL database and return the connection object."""
     try:
-        conn = psycopg2.connect(database_url)
+        conn = psycopg2.connect(**db_params)
         return conn
     except Exception as e:
         st.error(f"Database connection error: {e}")

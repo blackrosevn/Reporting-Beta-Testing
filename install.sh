@@ -46,13 +46,14 @@ pip install streamlit pandas plotly psycopg2-binary openpyxl python-dotenv
 # Configure PostgreSQL
 echo "Configuring PostgreSQL..."
 # Create database user
-sudo -u postgres psql -c "CREATE USER gsm WITH PASSWORD 'gsm';"
-sudo -u postgres psql -c "ALTER USER gsm WITH SUPERUSER;"
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'root123';"
+sudo -u postgres psql -c "CREATE USER root WITH PASSWORD 'root123' SUPERUSER;"
+sudo -u postgres psql -c "CREATE DATABASE vinatex_reports;"
 
 # Initialize the database
 echo "Initializing database..."
-export PGUSER=gsm
-export PGPASSWORD=gsm
+export PGUSER=root
+export PGPASSWORD=root123
 export PGHOST=localhost
 export PGPORT=5432
 export PGDATABASE=vinatex_reports
