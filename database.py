@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import streamlit as st
 
 # Database connection parameters from environment variables
-database_url = os.getenv('DATABASE_URL')
+database_url = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/vinatex_reports')
 
 @st.cache_resource
 def initialize_connection():
