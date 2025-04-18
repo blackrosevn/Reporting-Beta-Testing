@@ -6,13 +6,7 @@ import random
 from datetime import datetime, timedelta
 
 # Database connection parameters
-db_params = {
-    'host': os.getenv('PGHOST', 'localhost'),
-    'database': os.getenv('PGDATABASE', 'vinatex_reports'),
-    'user': os.getenv('PGUSER', 'postgres'),
-    'password': os.getenv('PGPASSWORD', 'postgres'),
-    'port': os.getenv('PGPORT', '5432')
-}
+database_url = os.getenv('DATABASE_URL')
 
 # SQL queries for database initialization
 CREATE_DB_QUERY = "CREATE DATABASE vinatex_reports;"
@@ -355,12 +349,6 @@ def create_accounts_file():
         f.write("   Username: namdinh\n")
         f.write("   Password: namdinh123\n\n")
         
-        f.write("Database Credentials:\n")
-        f.write(f"Host: {db_params['host']}\n")
-        f.write(f"Database: {db_params['database']}\n")
-        f.write(f"User: {db_params['user']}\n")
-        f.write(f"Password: {db_params['password']}\n")
-        f.write(f"Port: {db_params['port']}\n")
 
 def create_organizations_file():
     """Create Organizations.txt file with organization information."""
@@ -448,77 +436,58 @@ def create_reports_file():
 
 def initialize_database():
     """Initialize the database with tables and sample data."""
-    # Connect to default database
-    conn = psycopg2.connect(
-        host=db_params['host'],
-        database="postgres",
-        user=db_params['user'],
-        password=db_params['password'],
-        port=db_params['port']
-    )
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    cursor = conn.cursor()
-    
-    # Check if our database exists
-    cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_params['database'],))
-    exists = cursor.fetchone()
-    
-    # Create database if it doesn't exist
-    if not exists:
-        print(f"Creating database {db_params['database']}...")
-        cursor.execute(CREATE_DB_QUERY)
-    else:
-        print(f"Database {db_params['database']} already exists.")
-    
-    # Close connection to default database
-    cursor.close()
-    conn.close()
-    
-    # Connect to our database
-    conn = psycopg2.connect(**db_params)
-    cursor = conn.cursor()
-    
-    print("Creating tables...")
-    cursor.execute(CREATE_TABLES_SQL)
-    conn.commit()
-    
-    # Check if we already have data
-    cursor.execute("SELECT COUNT(*) FROM organizations")
-    org_count = cursor.fetchone()[0]
-    
-    if org_count == 0:
-        print("Inserting sample organizations...")
-        cursor.execute(SAMPLE_ORGANIZATIONS_SQL)
+    try:
+        # Connect to database
+        conn = psycopg2.connect(database_url)
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
+
+        # Create tables
+        print("Creating tables...")
+        cursor.execute(CREATE_TABLES_SQL)
         conn.commit()
-        
-        print("Inserting sample users...")
-        cursor.execute(SAMPLE_USERS_SQL)
-        conn.commit()
-        
-        print("Creating sample report templates...")
-        create_sample_report_templates(cursor)
-        conn.commit()
-        
-        print("Creating sample assigned reports...")
-        create_sample_assigned_reports(cursor)
-        conn.commit()
-        
-        print("Creating accounts.txt file...")
-        create_accounts_file()
-        
-        print("Creating Organizations.txt file...")
-        create_organizations_file()
-        
-        print("Creating reports.txt file...")
-        create_reports_file()
-    else:
-        print("Sample data already exists.")
-    
-    # Close connection
-    cursor.close()
-    conn.close()
-    
-    print("Database initialization complete.")
+
+        # Check if we already have data
+        cursor.execute("SELECT COUNT(*) FROM organizations")
+        org_count = cursor.fetchone()[0]
+
+        if org_count == 0:
+            print("Inserting sample organizations...")
+            cursor.execute(SAMPLE_ORGANIZATIONS_SQL)
+            conn.commit()
+
+            print("Inserting sample users...")
+            cursor.execute(SAMPLE_USERS_SQL)
+            conn.commit()
+
+            print("Creating sample report templates...")
+            create_sample_report_templates(cursor)
+            conn.commit()
+
+            print("Creating sample assigned reports...")
+            create_sample_assigned_reports(cursor)
+            conn.commit()
+
+            print("Creating accounts.txt file...")
+            create_accounts_file()
+
+            print("Creating Organizations.txt file...")
+            create_organizations_file()
+
+            print("Creating reports.txt file...")
+            create_reports_file()
+        else:
+            print("Sample data already exists.")
+
+        # Close connection
+        cursor.close()
+        conn.close()
+
+        print("Database initialization complete.")
+        return True
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+        return False
 
 if __name__ == "__main__":
     initialize_database()

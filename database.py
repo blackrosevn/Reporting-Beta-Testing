@@ -4,27 +4,16 @@ import pandas as pd
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 import streamlit as st
+import urllib.parse
 
-# Database connection parameters from environment variables
-database_url = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@0.0.0.0:5432/vinatex_reports')
+# Get database URL from environment
+database_url = os.getenv('DATABASE_URL')
 
 @st.cache_resource
 def initialize_connection():
     """Establish a connection to the PostgreSQL database and return the connection object."""
     try:
-        if database_url:
-            # Use the DATABASE_URL environment variable if available
-            conn = psycopg2.connect(database_url)
-        else:
-            # Fallback to individual parameters
-            db_params = {
-                'host': os.getenv('PGHOST', 'localhost'),
-                'database': os.getenv('PGDATABASE', 'vinatex_reports'),
-                'user': os.getenv('PGUSER', 'postgres'),
-                'password': os.getenv('PGPASSWORD', 'postgres'),
-                'port': os.getenv('PGPORT', '5432')
-            }
-            conn = psycopg2.connect(**db_params)
+        conn = psycopg2.connect(database_url)
         return conn
     except Exception as e:
         st.error(f"Database connection error: {e}")
@@ -39,11 +28,11 @@ def execute_query(query, params=None, fetch=True):
     conn = get_connection()
     if conn is None:
         return None
-    
+
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(query, params)
-            
+
             if fetch:
                 results = cursor.fetchall()
                 return pd.DataFrame(results) if results else pd.DataFrame()
